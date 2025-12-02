@@ -11,7 +11,7 @@ def build_dataset_from_articles(
     text_col: str = "content",
     date_col: str = "date",          # 날짜 컬럼명
     output_csv: str | None = None,
-    rollcall: bool = True,           # ← "트럼프일 때 rollcall 허용" 플래그
+    rollcall: bool = True,           # "트럼프일 때 rollcall 허용" 플래그
 ) -> pd.DataFrame:
     df_articles = pd.read_csv(input_csv)
     print("기사 컬럼:", df_articles.columns.tolist())
@@ -32,36 +32,17 @@ def build_dataset_from_articles(
         if not quotes_ko:
             continue
 
-        # 기사 단위 트럼프 여부
-        article_lower = article_text.lower()
-        is_trump_article = (
-            "트럼프" in article_text
-            or "도널드 트럼프" in article_text
-            or "donald trump" in article_lower
-            or "president trump" in article_lower
-        )
-
+        # 인용문 하나씩 돌면서 span 매칭
         for quote_ko in quotes_ko:
             gid += 1
 
-            quote_lower = str(quote_ko).lower()
-            is_trump_quote = (
-                "트럼프" in quote_ko
-                or "도널드 트럼프" in quote_ko
-                or "donald trump" in quote_lower
-                or "president trump" in quote_lower
-            )
-
-            # 🔴 여기서 정확히 정의
-            # rollcall=True로 build_dataset을 호출했을 때만,
-            # 그리고 진짜 트럼프 문맥일 때만 rollcall 사용
-            use_rollcall = rollcall and (is_trump_article or is_trump_quote)
-
+            # 원문 인용문의 영어 번역 (실패 시 None)
             try:
                 original_en = translate_ko_to_en(quote_ko)
             except Exception:
                 original_en = None
 
+            # QDD2 파이프라인 호출
             try:
                 out = run_qdd2(
                     text=article_text,
@@ -70,9 +51,10 @@ def build_dataset_from_articles(
                     date=article_date,
                     top_n=15,
                     top_k=3,
-                    rollcall=use_rollcall,   # ← 이제 정의돼 있음
+                    rollcall=rollcall,
                     debug=False,
                     search=True,
+                    top_matches=2,  # SBERT top-k 설정
                 )
             except Exception as e:
                 records.append(

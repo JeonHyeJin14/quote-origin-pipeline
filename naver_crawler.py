@@ -235,6 +235,8 @@ def check_conditions(title: str, content: str) -> bool:
 def crawl_world_articles(
     num_articles: int = 100,
     days_back: int = 90,
+    start_date: Optional[str] = None,  # "YYYY-MM-DD"
+    end_date: Optional[str] = None,    # "YYYY-MM-DD"
 ) -> pd.DataFrame:
     """
     세계(104) 섹션에서,
@@ -242,20 +244,45 @@ def crawl_world_articles(
     - 헤드라인에 직접 인용문이 있는 기사만
     - num_articles개 채워질 때까지 수집 후 즉시 종료.
 
+    날짜 설정 방식:
+    - start_date, end_date 둘 다 주어지면 그 범위 내 날짜만 탐색 ("YYYY-MM-DD")
+    - 둘 다 None이면 days_back 기준으로 오늘부터 과거로 탐색
+
     반환: DataFrame(columns=["category", "title", "date", "content", "url"])
     """
     data = {"category": [], "title": [], "date": [], "content": [], "url": []}
     collected_count = 0
     visited: set[str] = set()
 
-    today = datetime.today()
-    print(">>> 기사 수집 시작 (세계 섹션, 헤드라인 직접 인용문 필터)...")
+    # 날짜 리스트 구성
+    if start_date and end_date:
+        # 문자열 → date
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
+        if start_dt > end_dt:
+            # 잘못 넣어도 동작하게 뒤집어줌
+            start_dt, end_dt = end_dt, start_dt
 
-    for d in range(days_back):
+        num_days = (end_dt - start_dt).days + 1
+        date_list = [start_dt + timedelta(days=i) for i in range(num_days)]
+        # 최신 날짜부터 탐색하고 싶으면 아래처럼 뒤집기
+        date_list = list(reversed(date_list))
+        print(
+            f">>> 기사 수집 시작 (세계 섹션, {start_dt} ~ {end_dt}, "
+            f"헤드라인 직접 인용문 필터)..."
+        )
+    else:
+        today = datetime.today().date()
+        date_list = [today - timedelta(days=d) for d in range(days_back)]
+        print(
+            f">>> 기사 수집 시작 (세계 섹션, 최근 {days_back}일, "
+            f"헤드라인 직접 인용문 필터)..."
+        )
+
+    for date in date_list:
         if collected_count >= num_articles:
             break
 
-        date = today - timedelta(days=d)
         date_str = date.strftime("%Y%m%d")
         page = 1
 
@@ -336,12 +363,19 @@ def crawl_world_articles(
     return df
 
 
+
 # -------------------------------------------------------------------
 # 5. 모듈 단독 실행용 (옵션)
 # -------------------------------------------------------------------
 
 if __name__ == "__main__":
-    df = crawl_world_articles(num_articles=10, days_back=30)
+    df = crawl_world_articles(
+        num_articles=5,
+        start_date="2025-10-01",
+        end_date="2025-9-30",
+
+        # days_back=30  # 필요 없으면 안 써도 됨
+    )
 
     if not df.empty:
         filename = "articles.csv"
@@ -350,3 +384,4 @@ if __name__ == "__main__":
         print(df[["date", "title"]].head())
     else:
         print("\n조건에 맞는 데이터가 없습니다.")
+
