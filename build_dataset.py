@@ -202,7 +202,7 @@ if __name__ == "__main__":
         date_col=DATE_COL,
         output_csv=OUTPUT_CSV,
         rollcall=False,     # 트럼프 문맥이면 rollcall 사용
-        span_top_k=5,      # 인용문 1개당 원문 후보
+        span_top_k=1,      # 인용문 1개당 원문 후보
     )
 
     print("=== 데이터 생성 완료 ===")

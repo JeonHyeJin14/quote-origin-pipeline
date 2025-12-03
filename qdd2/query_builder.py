@@ -78,11 +78,16 @@ def generate_search_query(
     Build Korean/English search queries using entities + keywords.
 
     rollcall_mode=True:
-        query_ko/en = [speaker] [article_date] [NER 고유명사 1개 (PS/OG/LC)]
+        → Rollcall 전용 짧은 쿼리:
+            EN: Trump + 핵심 키워드 1개
+            KO: 발화자 + 핵심 키워드 1개
+
     default:
-        query = speaker + location tokens + keyword tokens + optional quoted sentence
+        → 기존 일반 모드 쿼리:
+            speaker + location tokens + keyword tokens + optional quoted sentence
     """
     article_date_str, date_en = _format_date_en(article_date)
+
     per_list = entities_by_type.get("PER", [])
     if not per_list:
         return {"ko": None, "en": None}
@@ -112,6 +117,7 @@ def generate_search_query(
             logger.warning("Location translation failed, falling back to original: %s", loc)
             locs_en_tokens.append(loc)
 
+    # 키워드 상위 top_k
     top_kws_ko = [kw for kw, _ in keywords[:top_k]]
     top_kws_ko = _dedupe_preserve(top_kws_ko)
     kws_en_tokens: List[str] = []
@@ -135,48 +141,83 @@ def generate_search_query(
     # =========================
     # 1) Rollcall 모드 전용 블록
     # =========================
-    if rollcall_mode and article_date is not None:
+    if rollcall_mode:
+        # Rollcall 쿼리는 "Trump + 핵심 키워드 1개"로 단순화
+        speaker_roll_en = "Trump"
 
-        # article_date_str, date_en 는 함수 시작부에서 _format_date_en 로 이미 계산됨
-        # article_date_str: 원본 (예: "2025.11.30")
-        # date_en        : "November 30, 2025"
+        focus_ko: Optional[str] = top_kws_ko[0] if top_kws_ko else None
+        focus_en_word: Optional[str] = None
 
-        # --- (선택) speaker_en 정제 함수 ---
-        def normalize_name_en(name: str, max_words: int = 3) -> str:
-            import re as _re
-            name = _re.sub(r"[^A-Za-z\s]", " ", str(name))
-            name = _re.sub(r"\s+", " ", name).strip()
-            parts = name.split()
-            if not parts:
-                return ""
-            return " ".join(parts[:max_words])
+        if focus_ko:
+            try:
+                focus_en = translate_ko_to_en(focus_ko)
+                tokens = re.findall(r"[A-Za-z]+", focus_en)
+                if tokens:
+                    focus_en_word = tokens[-1]  # 예: "Violence in Sudan" → "Sudan"
+            except Exception:
+                focus_en_word = None
 
-        # ===========================
-        # 최종 쿼리 구성 (EN / KO)
-        # ===========================
-        # EN: 발화자 + 날짜
-        parts_en = []
-        if speaker_en:
-            speaker_en_clean = normalize_name_en(speaker_en, max_words=3)
-            if speaker_en_clean:
-                parts_en.append(speaker_en_clean)
-        if date_en:
-            parts_en.append(date_en)  # ← 여기
-        query_en = " ".join(parts_en).strip() or None
+        if not focus_en_word:
+            focus_en_word = "speech"
 
-        # KO: 발화자 + 날짜
-        parts_ko = []
-        if speaker_ko:
-            parts_ko.append(str(speaker_ko))
-        if article_date_str:
-            parts_ko.append(article_date_str)
-        query_ko = " ".join(parts_ko).strip() or None
+        query_en = f"{speaker_roll_en} {focus_en_word}".strip()
+
+        ko_parts = [speaker_ko]
+        if focus_ko:
+            ko_parts.append(focus_ko)
+        query_ko = " ".join(_dedupe_preserve(ko_parts)).strip()
 
         logger.info("[RollcallQuery] ko=%s", query_ko)
         logger.info("[RollcallQuery] en=%s", query_en)
 
-        # 롤콜 모드에서는 여기서 바로 종료
-        return {"ko": query_ko, "en": query_en}
+        return {"ko": query_ko or None, "en": query_en or None}
+
+    # # =========================
+    # # 1) Rollcall 모드 전용 블록
+    # # =========================
+    # if rollcall_mode and article_date is not None:
+    #
+    #     # article_date_str, date_en 는 함수 시작부에서 _format_date_en 로 이미 계산됨
+    #     # article_date_str: 원본 (예: "2025.11.30")
+    #     # date_en        : "November 30, 2025"
+    #
+    #     # --- (선택) speaker_en 정제 함수 ---
+    #     def normalize_name_en(name: str, max_words: int = 3) -> str:
+    #         import re as _re
+    #         name = _re.sub(r"[^A-Za-z\s]", " ", str(name))
+    #         name = _re.sub(r"\s+", " ", name).strip()
+    #         parts = name.split()
+    #         if not parts:
+    #             return ""
+    #         return " ".join(parts[:max_words])
+    #
+    #     # ===========================
+    #     # 최종 쿼리 구성 (EN / KO)
+    #     # ===========================
+    #     # EN: 발화자 + 날짜
+    #     parts_en = []
+    #     if speaker_en:
+    #         speaker_en_clean = normalize_name_en(speaker_en, max_words=3)
+    #         if speaker_en_clean:
+    #             parts_en.append(speaker_en_clean)
+    #     if date_en:
+    #         parts_en.append(date_en)  # ← 여기
+    #     query_en = " ".join(parts_en).strip() or None
+    #
+    #     # KO: 발화자 + 날짜
+    #     parts_ko = []
+    #     if speaker_ko:
+    #         parts_ko.append(str(speaker_ko))
+    #     if article_date_str:
+    #         parts_ko.append(article_date_str)
+    #     query_ko = " ".join(parts_ko).strip() or None
+    #
+    #     logger.info("[RollcallQuery] ko=%s", query_ko)
+    #     logger.info("[RollcallQuery] en=%s", query_en)
+    #
+    #     # 롤콜 모드에서는 여기서 바로 종료
+    #     return {"ko": query_ko, "en": query_en}
+
 
     # =========================
     # 2) 일반 모드 (기존 로직)

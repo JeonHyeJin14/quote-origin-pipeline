@@ -1,61 +1,94 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from urllib.parse import quote
-import time
+import requests
+from bs4 import BeautifulSoup
+from typing import List
 
-SEARCH_BASE = "https://rollcall.com/factbase/trump/search/?q="
+API_BASE = "https://rollcall.com/wp-json/factbase/v1/search"
 
-def get_search_results(query, top_k=5):
-    encoded_query = quote(query)
-    url = SEARCH_BASE + encoded_query
 
-    chrome_options = Options()
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--start-maximized")
-    chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    )
+def get_search_results(query: str, top_k: int = 5) -> List[str]:
+    params = {
+        "q": query,
+        "media": "",
+        "type": "",
+        "sort": "date",
+        "location": "all",
+        "place": "all",
+        "page": 1,
+        "format": "json",
+    }
 
-    driver = webdriver.Chrome(options=chrome_options)
-    driver.get(url)
+    resp = requests.get(API_BASE, params=params, timeout=10)
+    print("[ROLLCALL] status:", resp.status_code, "url:", resp.url)
 
-    wait = WebDriverWait(driver, 30)
+    if resp.status_code != 200:
+        return []
 
-    # 결과 로딩 대기
-    wait.until(
-        EC.presence_of_all_elements_located(
-            (By.XPATH, "//a[contains(@href, '/factbase/trump/transcript/')]")
-        )
-    )
-    time.sleep(1)
+    try:
+        payload = resp.json()
+    except Exception:
+        print("[ROLLCALL] invalid json")
+        return []
 
-    # transcript 링크 수집
-    elems = driver.find_elements(
-        By.XPATH,
-        "//a[contains(@href, '/factbase/trump/transcript/')]"
-    )
-    elems = driver.find_elements(By.CSS_SELECTOR, "a[title='View Transcript']")
-    links = [
-        e.get_attribute("href")
-        for e in elems
-        if e.get_attribute("href") and "transcript" in e.get_attribute("href")
-    ][:top_k]
+    data = payload.get("data", []) or []
+    print("[ROLLCALL] data_len:", len(data))
 
-    driver.quit()
+    links: List[str] = []
+    seen = set()
+
+    for idx, item in enumerate(data):
+        url = item.get("factbase_url") or item.get("url") or item.get("permalink")
+        if not url:
+            continue
+
+        # 트럼프 factbase면 다 허용 (나중에 타입 필터 세분화 가능)
+        if "/factbase/trump/" not in url:
+            continue
+
+        base_url = url.split("#", 1)[0]
+        if base_url in seen:
+            continue
+        seen.add(base_url)
+        links.append(base_url)
+
+        if idx < 3:
+            print(f"[ROLLCALL] sample link {idx}: {base_url}")
+
+        if len(links) >= top_k:
+            break
+
+    print("[ROLLCALL] final links:", len(links))
     return links
 
 
-if __name__ == "__main__":
-    query = "trump venezuela 29"
-    links = get_search_results(query)
+def fetch_transcript_text(url: str) -> str:
+    """
+    Rollcall transcript 페이지에서 'Full Transcript' 이하 <p>들을 이어붙여 하나의 텍스트로 반환.
+    못 찾으면 페이지의 모든 <p>를 fallback으로 사용.
+    """
+    print("[ROLLCALL] fetch_transcript_text:", url)
+    resp = requests.get(url, timeout=15)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
 
-    print("\n=== Top Search Results ===")
-    for i, link in enumerate(links, start=1):
-        print(f"{i}. {link}")
-    if not links:
-        print("❌ No results found.")
+    # "Full Transcript" 헤더 이후의 p 태그만 모으기
+    header = soup.find(lambda t: t.name in ("h2", "h3") and "Full Transcript" in t.get_text())
+    paragraphs = []
+
+    if header:
+        for sib in header.find_all_next():
+            if sib.name in ("h2", "h3"):
+                break
+            if sib.name == "p":
+                txt = sib.get_text(" ", strip=True)
+                if txt:
+                    paragraphs.append(txt)
+    else:
+        # fallback: 모든 p
+        for p in soup.find_all("p"):
+            txt = p.get_text(" ", strip=True)
+            if txt:
+                paragraphs.append(txt)
+
+    text = "\n".join(paragraphs)
+    print("[ROLLCALL] transcript chars:", len(text))
+    return text

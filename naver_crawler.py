@@ -412,9 +412,9 @@ def crawl_world_articles(
 
 if __name__ == "__main__":
     df = crawl_world_articles(
-        num_articles=5,
-        start_date="2024-11-01",  # 또는 "20241201"
-        end_date="2024-11-20",    # 또는 "20241120"
+        num_articles=70,
+        start_date="2025-8-13",  # 또는 "20241201"
+        end_date="2025-8-7",    # 또는 "20241120"
     )
 
     if not df.empty:
