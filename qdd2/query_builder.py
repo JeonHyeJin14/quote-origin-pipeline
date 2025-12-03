@@ -40,7 +40,7 @@ def _format_date_en(article_date: Optional[str]) -> Tuple[Optional[str], Optiona
         return s, s
 
     # 원하는 포맷: November 30, 2025  (쉼표 포함)
-    date_en = dt.strftime("%B %d, %Y")
+    date_en = dt.strftime("%B %d %Y")
     return s, date_en
 
 

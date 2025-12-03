@@ -150,6 +150,7 @@ def run_qdd2(
     # 4) (옵션) 검색 + SBERT 기반 best span
     search_items: list[dict] = []
     best_span: dict | None = None
+    span_candidates: list[dict] = []  # ★ 추가: 후보 span 리스트
 
     if search:
         logger.info("[Step 4] Running search with generated query")
@@ -234,6 +235,8 @@ def run_qdd2(
                                 best_span.get("best_score", -1.0),
                                 best_span.get("url", ""),
                             )
+                            # ★ 추가: snippet_matcher에서 넣어준 후보 리스트 꺼내기
+                            span_candidates = best_span.get("top_k_candidates", []) or []
                         else:
                             logger.warning("No span passed the similarity threshold.")
                     except Exception as e:
@@ -245,6 +248,7 @@ def run_qdd2(
         "pipeline_result": result,
         "search_items": search_items,
         "best_span": best_span,
+        "span_candidates": span_candidates,  # ★ 추가
     }
 
 

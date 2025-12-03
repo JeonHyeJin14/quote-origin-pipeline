@@ -109,6 +109,8 @@ def find_best_span_from_candidates_debug(
     Iterate through candidate snippets, return the best-scoring span above threshold.
     """
     best_global = None
+    global_candidates = []   # ★ 추가: 모든 span 후보 저장 리스트
+
     for cand in candidates:
         url = cand.get("url")
         snippet = cand.get("snippet")
@@ -136,5 +138,17 @@ def find_best_span_from_candidates_debug(
 
         if (best_global is None) or (score > best_global["best_score"]):
             best_global = span_res
+    # ★ 여기서 후보 리스트를 정렬
+    if global_candidates:
+        sorted_candidates = sorted(
+            global_candidates,
+            key=lambda x: x.get("best_score", 0.0),
+            reverse=True
+        )
+    else:
+        sorted_candidates = []
 
-    return best_global
+    # ★ best_global가 존재하면, 후보 리스트 포함시켜 반환
+    if best_global is not None:
+        best_global["top_k_candidates"] = sorted_candidates
+        return best_global
