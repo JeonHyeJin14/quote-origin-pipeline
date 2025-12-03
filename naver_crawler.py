@@ -412,7 +412,7 @@ def crawl_world_articles(
 
 if __name__ == "__main__":
     df = crawl_world_articles(
-        num_articles=2,
+        num_articles=5,
         start_date="2024-11-01",  # 또는 "20241201"
         end_date="2024-11-20",    # 또는 "20241120"
     )

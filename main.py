@@ -178,7 +178,7 @@ def run_qdd2(
 
                 if not search_items:
                     logger.info("[Search] No rollcall results, fallback to Google CSE")
-                    data = google_cse_search(query, num=5, debug=debug)
+                    data = google_cse_search(query, num=20, debug=debug)
                     search_items = data.get("items", []) or []
 
             # 4-B) 그 외에는 무조건 CSE 사용
@@ -249,6 +249,7 @@ def run_qdd2(
         "search_items": search_items,
         "best_span": best_span,
         "span_candidates": span_candidates,  # ★ 추가
+
     }
 
 

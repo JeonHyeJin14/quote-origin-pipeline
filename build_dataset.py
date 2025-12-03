@@ -114,6 +114,8 @@ def build_dataset_from_articles(
             #       ]
             span_candidates = out.get("span_candidates") or []
 
+            print("span_candidates 개수:", len(span_candidates), " / quote:", quote_ko[:30])
+
             # 후보 리스트가 없다면, 기존 best_span 하나만 쓰는 fallback
             if not span_candidates:
                 best_span = out.get("best_span") or {}
@@ -198,8 +200,8 @@ if __name__ == "__main__":
         text_col=TEXT_COL,
         date_col=DATE_COL,
         output_csv=OUTPUT_CSV,
-        rollcall=True,     # 트럼프 문맥이면 rollcall 사용
-        span_top_k=3,      # 인용문 1개당 원문 후보
+        rollcall=False,     # 트럼프 문맥이면 rollcall 사용
+        span_top_k=5,      # 인용문 1개당 원문 후보
     )
 
     print("=== 데이터 생성 완료 ===")
