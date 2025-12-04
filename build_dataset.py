@@ -13,6 +13,7 @@ def build_dataset_from_articles(
     output_csv: str | None = None,
     rollcall: bool = True,           # ← "트럼프일 때 rollcall 허용" 플래그
     span_top_k: int = 3,             # ← 인용문마다 원문 후보 TOP K개 추출
+    min_score: float | None = None,  # ← 최소 similarity threshold (예: 0.2)
 ) -> pd.DataFrame:
     df_articles = pd.read_csv(input_csv)
     print("기사 컬럼:", df_articles.columns.tolist())
@@ -136,6 +137,10 @@ def build_dataset_from_articles(
                 )
                 source_url = best_span.get("url")
 
+                # ===== 여기서 min_score 필터링 =====
+                if (min_score is not None) and (sim_score is not None) and (sim_score < min_score):
+                    continue
+
                 records.append(
                     {
                         "id": gid,
@@ -167,6 +172,10 @@ def build_dataset_from_articles(
                     or cand.get("score")
                 )
                 source_url = cand.get("url")
+
+                # ===== 여기서 min_score 필터링 =====
+                if (min_score is not None) and (sim_score is not None) and (sim_score < min_score):
+                    continue
 
                 records.append(
                     {
@@ -203,6 +212,7 @@ if __name__ == "__main__":
         output_csv=OUTPUT_CSV,
         rollcall=False,     # 트럼프 문맥이면 rollcall 사용
         span_top_k=1,      # 인용문 1개당 원문 후보
+        min_score=0.2,  # ← 여기
     )
 
     print("=== 데이터 생성 완료 ===")
